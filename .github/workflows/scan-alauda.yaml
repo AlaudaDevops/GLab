@@ -1,5 +1,18 @@
 name: Scan vulnerabilities for Alauda
 on:
+  pull_request:
+    branches:
+      - main
+      - 'alauda-v*'
+    paths:
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/scan-alauda.yaml'
+  push:
+    branches:
+      - main
+      - 'alauda-v*'
   schedule:
     - cron: '0 0 * * *'
   workflow_dispatch:
@@ -17,6 +30,17 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
+
+      - name: Generate version
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          GENERATED_VERSION="0.0.0-${SHORT_SHA}"
+          echo "GENERATED_VERSION=$GENERATED_VERSION" >> $GITHUB_ENV
+
+      - name: Get Go version
+        run: |
+          GO_VERSION=$(go version | awk '{print $3}')
+          echo "GO_VERSION=$GO_VERSION" >> $GITHUB_ENV
 
       - name: Set up GoReleaser
         uses: goreleaser/goreleaser-action@v6

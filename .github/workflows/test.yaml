@@ -1,0 +1,180 @@
+name: Test
+
+on:
+  pull_request:
+    branches:
+      - main
+      - 'alauda-v*'
+    paths:
+      - '**/*.go'
+      - 'scripts/**/*'
+      - 'test/**/*'
+      - '.gitignore'
+      - '.golangci.yml'
+      - 'Makefile'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/test.yaml'
+  push:
+    branches:
+      - main
+      - 'alauda-v*'
+    paths:
+      - '**/*.go'
+      - 'scripts/**/*'
+      - 'test/**/*'
+      - '.gitignore'
+      - '.golangci.yml'
+      - 'Makefile'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/test.yaml'
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run unit tests with race detector
+        run: make test-race
+        env:
+          CGO_ENABLED: 1
+
+      - name: Generate coverage report
+        if: always()
+        run: make coverage
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+          retention-days: 7
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    # Only run integration tests if GITLAB_TOKEN_TEST is available
+    if: vars.GITLAB_TEST_HOST != ''
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run integration tests with race detector
+        run: make integration-test-race
+        env:
+          CGO_ENABLED: 1
+          GITLAB_TOKEN_TEST: ${{ secrets.GITLAB_TOKEN_TEST }}
+          GITLAB_TEST_HOST: ${{ vars.GITLAB_TEST_HOST }}
+
+      - name: Generate coverage report
+        if: always()
+        run: make coverage
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.8.0
+          args: --timeout=5m
+
+  check-generated-code:
+    name: Check Generated Code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Fix config file permissions
+        run: chmod 600 internal/config/config.yaml.lock
+
+      - name: Generate code
+        run: make generate
+
+      - name: Check for uncommitted changes
+        run: |
+          if [ -n "$(git status --short)" ]; then
+            echo "Error: Files should have been generated:"
+            git status --short
+            echo "Diff:"
+            git --no-pager diff HEAD
+            echo "Run 'make generate' and try again"
+            exit 1
+          else
+            echo "✓ No uncommitted changes detected"
+          fi
+
+  check-docs-update:
+    name: Check Documentation Update
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Fetch base branch
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          git checkout origin/${{ github.base_ref }}
+          git checkout ${{ github.sha }}
+
+      - name: Generate documentation
+        run: make gen-docs
+
+      - name: Check for documentation changes
+        run: |
+          git status
+          if [ -n "$(git add -A --dry-run)" ]; then
+            echo '✖ ERROR: Documentation changes detected!'
+            git diff --color --ws-error-highlight=all
+            echo '✖ These changes require a documentation update. To regenerate the docs, read https://gitlab.com/gitlab-org/cli/-/tree/main/docs#generating-the-docs.'
+            exit 1
+          else
+            echo '✔ No documentation updates detected.'
+          fi

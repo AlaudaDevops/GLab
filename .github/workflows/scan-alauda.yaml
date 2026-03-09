@@ -51,8 +51,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
+          # Pin Trivy to a currently available release to avoid installer 404 on retired old assets.
+          version: 'v0.69.3'
           scan-type: 'rootfs'
           scan-ref: 'dist/glab_linux_amd64_v1/alauda-glab'
           exit-code: 1

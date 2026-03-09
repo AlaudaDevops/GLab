@@ -25,7 +25,6 @@ ifndef CGO_LDFLAGS
 endif
 
 HASGOTESTSUM := $(shell which gotestsum 2> /dev/null)
-HASGOCILINT := $(shell which golangci-lint 2> /dev/null)
 
 ifdef HASGOTESTSUM
     GOTEST=gotestsum
@@ -33,11 +32,9 @@ else
     GOTEST=bin/gotestsum
 endif
 
-ifdef HASGOCILINT
-    GOLINT=golangci-lint
-else
-    GOLINT=bin/golangci-lint
-endif
+# Always use the repo-pinned golangci-lint binary to avoid CI/local
+# failures caused by outdated globally installed versions.
+GOLINT ?= bin/golangci-lint
 
 GO_LDFLAGS := -X main.commit=$(BUILD_COMMIT_SHA) $(GO_LDFLAGS)
 GO_LDFLAGS := $(GO_LDFLAGS) -X main.version=$(GLAB_VERSION)
@@ -46,7 +43,7 @@ BUILDLOC ?= ./bin/glab
 
 # Dependency versions
 GOTESTSUM_VERSION = 1.13.0
-GOLANGCI_LINT_VERSION = 2.7.2
+GOLANGCI_LINT_VERSION = 2.11.2
 
 # Add the ability to override some variables
 # Use with care
@@ -142,13 +139,8 @@ integration-test-race: export CI_PROJECT_PATH=$(shell git remote get-url origin)
 integration-test-race: bin/gotestsum ## Run tests with race detection
 	$(GOTEST) --no-summary=skipped --junitfile ./coverage.xml --format ${TEST_FORMAT} -- -coverprofile=./coverage.txt -covermode=atomic -race -tags=integration $(filter-out -v,${GOARGS}) $(if ${TEST_PKGS},${TEST_PKGS},./...) -count=1
 
-ifdef HASGOCILINT
-bin/golangci-lint:
-	@echo "Skip this"
-else
 bin/golangci-lint: bin/golangci-lint-${GOLANGCI_LINT_VERSION}
 	@ln -sf golangci-lint-${GOLANGCI_LINT_VERSION} bin/golangci-lint
-endif
 
 bin/golangci-lint-${GOLANGCI_LINT_VERSION}:
 	@mkdir -p bin
@@ -175,7 +167,7 @@ generate: ## Run go generate
 
 .PHONY: list-todo
 list-todo: ## Detect FIXME, TODO and other comment keywords
-	golangci-lint run --enable=godox --disable-all
+	$(GOLINT) run --enable=godox --disable-all
 
 .PHONY: gen-config
 gen-config: ## Generate config stub from lockfile

@@ -237,7 +237,7 @@ lint:
   needs:
     - job: prepare_go_cache
       optional: true
-  image: ${GITLAB_DEPENDENCY_PROXY}golangci/golangci-lint:v2.8.0
+  image: ${GITLAB_DEPENDENCY_PROXY}golangci/golangci-lint:v2.11.2
   cache:
     key:
       prefix: lint

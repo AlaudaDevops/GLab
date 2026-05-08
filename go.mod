@@ -1,6 +1,6 @@
 module gitlab.com/gitlab-org/cli
 
-go 1.26.2
+go 1.26.3
 
 // NOTE: this is required because of the bug described in
 // https://github.com/survivorbat/huhtest/issues/3
